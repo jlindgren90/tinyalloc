@@ -8,10 +8,19 @@
 /* tinyalloc */
 #include "tinyalloc.h"
 
-#define malloc(size) ta_alloc(size)
-#define calloc(n, size) ta_calloc(n, size)
-#define free(p) ta_free(p)
-#define realloc(p, size) ta_realloc(p, size)
+static char heap[256 * 1024 * 1024];
+static const ta_cfg_t cfg = {
+    .base         = heap,
+    .limit        = &heap[sizeof(heap)],
+    .max_blocks   = 256 * 1024,
+    .split_thresh = 16,
+    .alignment    = 16,
+};
+
+#define malloc(size) ta_alloc(&cfg, size)
+#define calloc(n, size) ta_calloc(&cfg, n, size)
+#define free(p) ta_free(&cfg, p)
+#define realloc(p, size) ta_realloc(&cfg, p, size)
 
 #define MAX_TEST_BLOCKS (100000)
 #define NUM_RANDOM_ALLOCS (100000)
@@ -172,8 +181,7 @@ int main(void) {
     srand(0x77777777);
 
     /* tinyalloc */
-    static char heap[256 * 1024 * 1024];
-    ta_init(heap, &heap[sizeof(heap)], 256 * 1024, 16, 16);
+    ta_init(&cfg);
 
     /* test 1-byte allocations */
     for (size_t idx = 0; idx < MAX_TEST_BLOCKS; idx++) {
