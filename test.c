@@ -156,16 +156,15 @@ static bool test_realloc(size_t idx, size_t size, uint8_t fill) {
 
 static void test_free(size_t idx) {
     uint8_t *mem = test_blocks[idx].mem;
-    if (mem == NULL) {
-        return;
-    }
-
-    size_t size = test_blocks[idx].size;
+    size_t size  = (mem == NULL) ? 0 : test_blocks[idx].size;
     assert(each_equal(mem, test_blocks[idx].fill, size));
 
     free(mem);
     test_blocks[idx].mem = NULL;
-    num_blocks--;
+
+    if (mem != NULL) {
+        num_blocks--;
+    }
     total_bytes -= size;
 }
 
