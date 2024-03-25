@@ -1,0 +1,6 @@
+test
+test-nostdlib
+*.o
+*.gcda
+*.gcno
+*.gcov
