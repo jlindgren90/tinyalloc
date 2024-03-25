@@ -182,6 +182,8 @@ int main(void) {
     /* tinyalloc */
     ta_init(&cfg);
 
+    assert(ta_check(&cfg));
+
     /* test 1-byte allocations */
     for (size_t idx = 0; idx < MAX_TEST_BLOCKS; idx++) {
         if (!test_malloc(idx, 1, rand())) {
@@ -189,6 +191,8 @@ int main(void) {
         }
         print_stats();
     }
+
+    assert(ta_check(&cfg));
 
     /* random free/malloc */
     for (size_t n = 0; n < NUM_RANDOM_ALLOCS; n++) {
@@ -198,6 +202,8 @@ int main(void) {
         print_stats();
     }
 
+    assert(ta_check(&cfg));
+
     /* random free/calloc */
     for (size_t n = 0; n < NUM_RANDOM_ALLOCS; n++) {
         size_t idx = (size_t)rand() % MAX_TEST_BLOCKS;
@@ -206,6 +212,8 @@ int main(void) {
         print_stats();
     }
 
+    assert(ta_check(&cfg));
+
     /* random realloc */
     for (size_t n = 0; n < NUM_RANDOM_ALLOCS; n++) {
         size_t idx = (size_t)rand() % MAX_TEST_BLOCKS;
@@ -213,11 +221,15 @@ int main(void) {
         print_stats();
     }
 
+    assert(ta_check(&cfg));
+
     /* free remaining */
     for (size_t idx = 0; idx < MAX_TEST_BLOCKS; idx++) {
         test_free(idx);
         print_stats();
     }
+
+    assert(ta_check(&cfg));
 
     printf("\n");
     return 0;
