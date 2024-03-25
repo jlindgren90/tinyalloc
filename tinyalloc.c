@@ -1,20 +1,8 @@
 #include "tinyalloc.h"
 
-#include <stdint.h>
-
-#ifdef TA_DEBUG
-extern void print_s(char *);
-extern void print_i(size_t);
-#else
-#define print_s(X)
-#define print_i(X)
-#endif
-
-/* optional C stdlib integration */
-#ifdef TA_USE_STDLIB
 #include <errno.h>
+#include <stdint.h>
 #include <string.h>
-#endif
 
 typedef struct Block Block;
 
@@ -32,46 +20,29 @@ typedef struct {
 } Heap;
 
 /**
- * If compaction is enabled, inserts block
- * into free list, sorted by addr.
- * If disabled, add block has new head of
- * the free list.
+ * Inserts block into free list, sorted by addr.
  */
 static void insert_block(Heap *heap, Block *block) {
-#ifndef TA_DISABLE_COMPACT
     Block *ptr  = heap->free;
     Block *prev = NULL;
     while (ptr != NULL) {
         if ((size_t)block->addr <= (size_t)ptr->addr) {
-            print_s("insert");
-            print_i((size_t)ptr);
             break;
         }
         prev = ptr;
         ptr  = ptr->next;
     }
     if (prev != NULL) {
-        if (ptr == NULL) {
-            print_s("new tail");
-        }
         prev->next = block;
     } else {
-        print_s("new head");
         heap->free = block;
     }
     block->next = ptr;
-#else
-    block->next = heap->free;
-    heap->free  = block;
-#endif
 }
 
-#ifndef TA_DISABLE_COMPACT
 static void release_blocks(Heap *heap, Block *scan, Block *to) {
     Block *scan_next;
     while (scan != to) {
-        print_s("release");
-        print_i((size_t)scan);
         scan_next   = scan->next;
         scan->next  = heap->fresh;
         heap->fresh = scan;
@@ -90,16 +61,12 @@ static void compact(Heap *heap) {
         scan = ptr->next;
         while (scan != NULL &&
                (size_t)prev->addr + prev->size == (size_t)scan->addr) {
-            print_s("merge");
-            print_i((size_t)scan);
             prev = scan;
             scan = scan->next;
         }
         if (prev != ptr) {
             size_t new_size =
                 (size_t)prev->addr - (size_t)ptr->addr + prev->size;
-            print_s("new size");
-            print_i(new_size);
             ptr->size   = new_size;
             Block *next = prev->next;
             // make merged blocks available
@@ -110,7 +77,6 @@ static void compact(Heap *heap) {
         ptr = ptr->next;
     }
 }
-#endif
 
 void ta_init(const ta_cfg_t *cfg) {
     Heap *heap  = (Heap *)cfg->base;
@@ -143,9 +109,7 @@ bool ta_free(const ta_cfg_t *cfg, void *free) {
                 heap->used = block->next;
             }
             insert_block(heap, block);
-#ifndef TA_DISABLE_COMPACT
             compact(heap);
-#endif
             return true;
         }
         prev  = block;
@@ -178,10 +142,8 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
             ptr->next  = heap->used;
             heap->used = ptr;
             if (is_top) {
-                print_s("resize top block");
                 ptr->size = num;
                 heap->top = (size_t)ptr->addr + num;
-#ifndef TA_DISABLE_SPLIT
             } else if (heap->fresh != NULL) {
                 size_t excess = ptr->size - num;
                 if (excess >= cfg->split_thresh) {
@@ -189,15 +151,10 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
                     Block *split = heap->fresh;
                     heap->fresh  = split->next;
                     split->addr  = (void *)((size_t)ptr->addr + num);
-                    print_s("split");
-                    print_i((size_t)split->addr);
-                    split->size = excess;
+                    split->size  = excess;
                     insert_block(heap, split);
-#ifndef TA_DISABLE_COMPACT
                     compact(heap);
-#endif
                 }
-#endif
             }
             return ptr;
         }
@@ -224,44 +181,9 @@ void *ta_alloc(const ta_cfg_t *cfg, size_t num) {
     if (block != NULL) {
         return block->addr;
     }
-#ifdef TA_USE_STDLIB
     errno = ENOMEM;
-#endif
     return NULL;
 }
-
-#ifdef TA_USE_STDLIB
-#define memclear(ptr, num) memset((ptr), 0, (num))
-#define memcopy(dst, src, num) memcpy((dst), (src), (num))
-#else
-static void memclear(void *ptr, size_t num) {
-    size_t *ptrw = (size_t *)ptr;
-    size_t numw  = (num & -sizeof(size_t)) / sizeof(size_t);
-    while (numw--) {
-        *ptrw++ = 0;
-    }
-    num &= (sizeof(size_t) - 1);
-    uint8_t *ptrb = (uint8_t *)ptrw;
-    while (num--) {
-        *ptrb++ = 0;
-    }
-}
-
-static void memcopy(void *dst, void *src, size_t num) {
-    size_t *dstw = (size_t *)dst;
-    size_t *srcw = (size_t *)src;
-    size_t numw  = (num & -sizeof(size_t)) / sizeof(size_t);
-    while (numw--) {
-        *dstw++ = *srcw++;
-    }
-    num &= (sizeof(size_t) - 1);
-    uint8_t *dstb = (uint8_t *)dstw;
-    uint8_t *srcb = (uint8_t *)srcw;
-    while (num--) {
-        *dstb++ = *srcb++;
-    }
-}
-#endif
 
 void *ta_calloc(const ta_cfg_t *cfg, size_t num, size_t size) {
     size_t orig = num;
@@ -270,13 +192,11 @@ void *ta_calloc(const ta_cfg_t *cfg, size_t num, size_t size) {
     if (size == 0 || num / size == orig) {
         Block *block = alloc_block(cfg, num);
         if (block != NULL) {
-            memclear(block->addr, block->size);
+            memset(block->addr, 0, block->size);
             return block->addr;
         }
     }
-#ifdef TA_USE_STDLIB
     errno = ENOMEM;
-#endif
     return NULL;
 }
 
@@ -311,13 +231,11 @@ void *ta_realloc(const ta_cfg_t *cfg, void *ptr, size_t num) {
         if (size > num) {
             size = num;
         }
-        memcopy(block->addr, ptr, size);
+        memcpy(block->addr, ptr, size);
         ta_free(cfg, ptr);
         return block->addr;
     }
-#ifdef TA_USE_STDLIB
     errno = ENOMEM;
-#endif
     return NULL;
 }
 

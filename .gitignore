@@ -1,7 +1,6 @@
 malloc_test
 stress_test
 test
-test-nostdlib
 *.o
 *.gcda
 *.gcno
