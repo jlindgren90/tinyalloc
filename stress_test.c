@@ -50,10 +50,27 @@
 #include <time.h>
 #include <errno.h>
 #include <err.h>
+#include <signal.h>
 
 #if DARWINTEST
 #include <darwintest.h>
 #endif
+
+/* tinyalloc */
+#include "tinyalloc.h"
+
+static char heap[4*1024*1024];
+static const ta_cfg_t cfg = {
+  .base = heap,
+  .limit = &heap[sizeof(heap)],
+  .max_blocks = 256,
+  .split_thresh = 16,
+  .alignment = 4,
+};
+
+#define malloc(size)   ta_alloc(&cfg,size)
+#define calloc(n,size) ta_calloc(&cfg,n,size)
+#define free(p)        ta_free(&cfg,p)
 
 /* globals */
 int rseed;	 /* initial random seed value */
@@ -226,6 +243,9 @@ int
 main(int argc, char *argv[])
 {
 	int argx;
+
+	/* tinyalloc */
+	ta_init(&cfg);
 
 	malloc_calls_made = malloc_bufs = 0;
 	mem_allocated = 0;

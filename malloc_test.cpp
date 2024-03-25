@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#if 0
 #include <gtest/gtest.h>
+#endif
+#include <assert.h>
 #include <elf.h>
 #include <limits.h>
 #include <malloc.h>
@@ -33,15 +36,18 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#if 0
 #include <tinyxml2.h>
 #include <android-base/file.h>
 #include <android-base/test_utils.h>
 #include "utils.h"
+#endif
 #if defined(__BIONIC__)
 #include "SignalUtils.h"
 #include "dlext_private.h"
@@ -55,6 +61,43 @@
 #elif defined(ANDROID_HOST_MUSL)
 #define HAVE_REALLOCARRAY 1
 #endif
+
+/* tinyalloc */
+#include "tinyalloc.h"
+
+static char heap[4*1024*1024];
+static const ta_cfg_t cfg = {
+  .base = heap,
+  .limit = &heap[sizeof(heap)],
+  .max_blocks = 4096,
+  .split_thresh = 16,
+  .alignment = 16,
+};
+
+#define malloc(size)          ta_alloc(&cfg,size)
+#define calloc(n,size)        ta_calloc(&cfg,n,size)
+#define free(p)               ta_free(&cfg,p)
+#define malloc_usable_size(p) ta_getsize(&cfg,p)
+#define realloc(p,size)       ta_realloc(&cfg,p,size)
+#undef HAVE_REALLOCARRAY
+
+#define TEST(x,name) static void test_##name(void)
+
+#define DoNotOptimize(x) (x)
+#define SCOPED_TRACE(x)
+
+#define GTEST_SKIP() return; std::stringstream()
+#define SKIP_WITH_HWASAN std::stringstream()
+
+#define ASSERT_TRUE(expr) assert(expr); std::stringstream()
+#define ASSERT_EQ(a,b) assert((a) == (b)); std::stringstream()
+#define ASSERT_NE(a,b) assert((a) != (b)); std::stringstream()
+#define ASSERT_LE(a,b) assert((a) <= (b)); std::stringstream()
+#define ASSERT_GE(a,b) assert((a) >= (b)); std::stringstream()
+#define ASSERT_DOUBLE_EQ(a,b) assert((a) == (b)); std::stringstream()
+#define ASSERT_ERRNO(val) assert(errno == (val)); std::stringstream()
+#define ASSERT_NO_FATAL_FAILURE(test) (test)
+
 TEST(malloc, malloc_std) {
   // Simple malloc test.
   void *ptr = malloc(100);
@@ -117,6 +160,7 @@ TEST(malloc, calloc_overflow) {
   ASSERT_EQ(nullptr, calloc(SIZE_MAX, 2));
   ASSERT_ERRNO(ENOMEM);
 }
+#if 0
 TEST(malloc, memalign_multiple) {
   SKIP_WITH_HWASAN << "hwasan requires power of 2 alignment";
   // Memalign test where the alignment is any value.
@@ -176,6 +220,7 @@ TEST(malloc, memalign_realloc) {
     free(ptr);
   }
 }
+#endif
 TEST(malloc, malloc_realloc_larger) {
   // Realloc to a larger size, malloc is used for the original allocation.
   char *ptr = (char *)malloc(100);
@@ -818,7 +863,7 @@ TEST(malloc, mallinfo2) {
 #endif
 }
 template <typename Type>
-void __attribute__((optnone)) VerifyAlignment(Type* floating) {
+void VerifyAlignment(Type* floating) {
   size_t expected_alignment = alignof(Type);
   if (expected_alignment != 0) {
     ASSERT_EQ(0U, (expected_alignment - 1) & reinterpret_cast<uintptr_t>(floating))
@@ -827,7 +872,7 @@ void __attribute__((optnone)) VerifyAlignment(Type* floating) {
   }
 }
 template <typename Type>
-void __attribute__((optnone)) TestAllocateType() {
+void TestAllocateType() {
   // The number of allocations to do in a row. This is to attempt to
   // expose the worst case alignment for native allocators that use
   // bins.
@@ -837,7 +882,7 @@ void __attribute__((optnone)) TestAllocateType() {
   for (size_t i = 0; i < kMaxConsecutiveAllocs; i++) {
     types[i] = new Type;
     VerifyAlignment(types[i]);
-    if (::testing::Test::HasFatalFailure()) {
+    if (false) {
       return;
     }
   }
@@ -849,7 +894,7 @@ void __attribute__((optnone)) TestAllocateType() {
     types[i] = reinterpret_cast<Type*>(malloc(sizeof(Type)));
     ASSERT_TRUE(types[i] != nullptr);
     VerifyAlignment(types[i]);
-    if (::testing::Test::HasFatalFailure()) {
+    if (false) {
       return;
     }
   }
@@ -860,13 +905,13 @@ void __attribute__((optnone)) TestAllocateType() {
   std::vector<Type> type_vector(kMaxConsecutiveAllocs);
   for (size_t i = 0; i < type_vector.size(); i++) {
     VerifyAlignment(&type_vector[i]);
-    if (::testing::Test::HasFatalFailure()) {
+    if (false) {
       return;
     }
   }
 }
 #if defined(__ANDROID__)
-static void __attribute__((optnone)) AndroidVerifyAlignment(size_t alloc_size, size_t aligned_bytes) {
+static void AndroidVerifyAlignment(size_t alloc_size, size_t aligned_bytes) {
   void* ptrs[100];
   uintptr_t mask = aligned_bytes - 1;
   for (size_t i = 0; i < sizeof(ptrs) / sizeof(void*); i++) {
@@ -928,7 +973,7 @@ void AlignCheck() {
       AndroidVerifyAlignment(i, 8);
     }
 #endif
-    if (::testing::Test::HasFatalFailure()) {
+    if (false) {
       return;
     }
   }
@@ -937,6 +982,7 @@ void AlignCheck() {
 TEST(malloc, align_check) {
   AlignCheck();
 }
+#if 0
 // Jemalloc doesn't pass this test right now, so leave it as disabled.
 TEST(malloc, DISABLED_alloc_after_fork) {
   // Both of these need to be a power of 2.
@@ -983,6 +1029,7 @@ TEST(malloc, DISABLED_alloc_after_fork) {
     delete thread;
   }
 }
+#endif
 TEST(android_mallopt, error_on_unexpected_option) {
 #if defined(__BIONIC__)
   const int unrecognized_option = -1;
@@ -994,6 +1041,7 @@ TEST(android_mallopt, error_on_unexpected_option) {
 #endif
 }
 bool IsDynamic() {
+#if 0
 #if defined(__LP64__)
   Elf64_Ehdr ehdr;
 #else
@@ -1009,6 +1057,9 @@ bool IsDynamic() {
   close(fd);
   // Assume dynamic in error cases.
   return !read_completed || ehdr.e_type == ET_DYN;
+#else
+  return false;
+#endif
 }
 TEST(android_mallopt, init_zygote_child_profiling) {
 #if defined(__BIONIC__)
@@ -1433,7 +1484,7 @@ TEST(malloc, zeroed_allocations_small_medium_sizes) {
 #if !defined(__BIONIC__)
   GTEST_SKIP() << "Only valid on bionic";
 #endif
-  if (IsLowRamDevice()) {
+  if (false) {
     GTEST_SKIP() << "Skipped on low memory devices.";
   }
   constexpr size_t kMaxAllocations = 1024;
@@ -1458,7 +1509,7 @@ TEST(malloc, zeroed_allocations_large_sizes) {
 #if !defined(__BIONIC__)
   GTEST_SKIP() << "Only valid on bionic";
 #endif
-  if (IsLowRamDevice()) {
+  if (false) {
     GTEST_SKIP() << "Skipped on low memory devices.";
   }
   constexpr size_t kMaxAllocations = 20;
@@ -1483,7 +1534,7 @@ TEST(malloc, zeroed_allocations_realloc) {
 #if !defined(__BIONIC__)
   GTEST_SKIP() << "Only valid on bionic";
 #endif
-  if (IsLowRamDevice()) {
+  if (false) {
     GTEST_SKIP() << "Skipped on low memory devices.";
   }
   // Vector of zero'd data used for comparisons.
@@ -1553,4 +1604,69 @@ TEST(android_mallopt, get_decay_time_enabled) {
 #else
   GTEST_SKIP() << "bionic-only test";
 #endif
+}
+
+int main(void) {
+  /* tinyalloc */
+  ta_init(&cfg);
+
+  test_malloc_std();
+  test_malloc_overflow();
+  test_calloc_std();
+  test_calloc_mem_init_disabled();
+  test_calloc_illegal();
+  test_calloc_overflow();
+  test_malloc_realloc_larger();
+  test_malloc_realloc_smaller();
+  test_malloc_multiple_realloc();
+  test_calloc_realloc_larger();
+  test_calloc_realloc_smaller();
+  test_calloc_multiple_realloc();
+  test_realloc_overflow();
+  test_pvalloc_std();
+  test_pvalloc_overflow();
+  test_valloc_std();
+  test_valloc_overflow();
+  test_malloc_info();
+  test_malloc_info_matches_mallinfo();
+  test_calloc_usable_size();
+  test_malloc_0();
+  test_calloc_0_0();
+  test_calloc_0_1();
+  test_calloc_1_0();
+  test_realloc_nullptr_0();
+  test_realloc_0();
+  test_verify_alignment();
+  test_mallopt_smoke();
+  test_mallopt_decay();
+  test_mallopt_purge();
+  test_mallopt_purge_all();
+  test_mallopt_log_stats();
+  test_mallopt_unique_params();
+  test_mallopt_scudo_only_options();
+  test_reallocarray_overflow();
+  test_reallocarray();
+  test_mallinfo();
+  test_mallinfo2();
+  test_align_check();
+  test_error_on_unexpected_option();
+  test_init_zygote_child_profiling();
+  test_set_allocation_limit();
+  test_set_allocation_limit_multiple();
+  test_set_allocation_limit_realloc_increase();
+  test_set_allocation_limit_realloc_decrease();
+  test_set_allocation_limit_realloc_free();
+  test_set_allocation_limit_multiple_threads();
+  test_multiple_enable_gwp_asan();
+  test_memtag_stack_is_on();
+  test_zero_init();
+  test_disable_mte();
+  test_allocation_slack();
+  test_realloc_mte_crash_b206701345();
+  test_zeroed_allocations_small_medium_sizes();
+  test_zeroed_allocations_large_sizes();
+  test_zeroed_allocations_realloc();
+  test_get_decay_time_enabled_errors();
+  test_get_decay_time_enabled();
+  return 0;
 }
