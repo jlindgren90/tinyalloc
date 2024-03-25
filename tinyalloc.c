@@ -1,3 +1,7 @@
+/*
+ * Copyright 2016 - 2017 Karsten Schmidt - Apache Software License 2.0
+ * Modified 2024 by John Lindgren
+ */
 #include "tinyalloc.h"
 
 #include <errno.h>
