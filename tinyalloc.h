@@ -2,6 +2,9 @@
  * Copyright 2016 - 2017 Karsten Schmidt - Apache Software License 2.0
  * Modified 2024 by John Lindgren
  */
+#ifndef TINYALLOC_H
+#define TINYALLOC_H
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,3 +35,5 @@ bool ta_check(const ta_cfg_t *cfg);
 #ifdef __cplusplus
 }
 #endif
+
+#endif  // TINYALLOC_H
