@@ -131,9 +131,6 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
         return NULL;  // prevent overflow
     }
     num = (num + cfg->alignment - 1) & -cfg->alignment;
-    if (num == 0) {
-        num = cfg->alignment;  // prevent zero-size block
-    }
     while (ptr != NULL) {
         const int is_top = ((size_t)ptr->addr + ptr->size >= top) &&
                            (num <= (size_t)cfg->limit - (size_t)ptr->addr);
@@ -181,6 +178,9 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
 }
 
 void *ta_alloc(const ta_cfg_t *cfg, size_t num) {
+    if (num == 0) {
+        return NULL;  // no error
+    }
     Block *block = alloc_block(cfg, num);
     if (block != NULL) {
         return block->addr;
@@ -190,10 +190,13 @@ void *ta_alloc(const ta_cfg_t *cfg, size_t num) {
 }
 
 void *ta_calloc(const ta_cfg_t *cfg, size_t num, size_t size) {
+    if (num == 0 || size == 0) {
+        return NULL;  // no error
+    }
     size_t orig = num;
     num *= size;
     // check for overflow
-    if (size == 0 || num / size == orig) {
+    if (num / size == orig) {
         Block *block = alloc_block(cfg, num);
         if (block != NULL) {
             memset(block->addr, 0, block->size);
