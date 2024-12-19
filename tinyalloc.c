@@ -5,8 +5,29 @@
 #include "tinyalloc.h"
 
 #include <errno.h>
-#include <stdint.h>
 #include <string.h>
+
+// uncomment to enable basic use-after-free checks
+// #define TA_SANITIZE
+
+#ifdef TA_SANITIZE
+#include <stdlib.h>
+static void mem_clear(void *ptr, size_t size) {
+    memset(ptr, 0xAB, size);
+}
+static void check_mem_clear(const void *ptr, size_t size) {
+    while (size--) {
+        const unsigned char *uptr = (const unsigned char *)ptr;
+        if (*uptr != 0xAB) {
+            abort();
+        }
+        ptr = uptr + 1;
+    }
+}
+#else
+#define mem_clear(ptr, size)
+#define check_mem_clear(ptr, size)
+#endif
 
 typedef struct Block Block;
 
@@ -96,6 +117,7 @@ void ta_init(const ta_cfg_t *cfg) {
         block++;
     }
     block->next = NULL;
+    mem_clear((void *)heap->top, (size_t)cfg->limit - heap->top);
 }
 
 bool ta_free(const ta_cfg_t *cfg, void *free) {
@@ -107,6 +129,7 @@ bool ta_free(const ta_cfg_t *cfg, void *free) {
     Block *prev  = NULL;
     while (block != NULL) {
         if (free == block->addr) {
+            mem_clear(block->addr, block->size);
             if (prev) {
                 prev->next = block->next;
             } else {
@@ -119,6 +142,9 @@ bool ta_free(const ta_cfg_t *cfg, void *free) {
         prev  = block;
         block = block->next;
     }
+#ifdef TA_SANITIZE
+    abort();
+#endif
     return false;
 }
 
@@ -157,6 +183,7 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
                     compact(heap);
                 }
             }
+            check_mem_clear(ptr->addr, ptr->size);
             return ptr;
         }
         prev = ptr;
@@ -172,6 +199,7 @@ static Block *alloc_block(const ta_cfg_t *cfg, size_t num) {
         ptr->size   = num;
         heap->used  = ptr;
         heap->top   = top + num;
+        check_mem_clear(ptr->addr, ptr->size);
         return ptr;
     }
     return NULL;
